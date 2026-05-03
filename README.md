@@ -28,7 +28,32 @@ Le tri de CV est souvent l'une des tâches les plus chronophages pour les équip
 
 L'application repose sur une infrastructure AWS native, événementielle et hautement scalable.
 
-*(Espace réservé pour le schéma d'architecture)*
+graph TD
+    %% Définition des couleurs
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
+    classDef front fill:#FE4B4B,stroke:#232F3E,stroke-width:2px,color:white;
+    classDef db fill:#000000,stroke:#232F3E,stroke-width:2px,color:white;
+
+    User([👤 Recruteur]) -->|Interagit avec| UI(🖥️ Interface Streamlit):::front
+
+    subgraph AWS [Cloud AWS - 100% Serverless]
+        UI -->|1. Upload CV| S3[(Amazon S3\nStockage PDF)]:::aws
+        S3 -->|2. Déclenche| L1(⚡ Lambda Ingestion):::aws
+        L1 -->|3. Parse & Anonymise| B1{🧠 Bedrock\nClaude 4.5}:::aws
+        L1 -->|4. Vectorise| B2{🧠 Bedrock\nTitan Embedding}:::aws
+        
+        UI -->|A. Requête de recherche| API(🌐 API Gateway):::aws
+        API -->|B. Route vers| L2(⚡ Lambda Search):::aws
+        L2 -->|C. Vectorise la requête| B2
+    end
+
+    subgraph External [Base Vectorielle]
+        L1 -->|5. Stocke les Vecteurs| PC[(🌲 Pinecone)]:::db
+        L2 -->|D. Recherche de Similarité| PC
+        PC -->|E. Renvoie Top 3 CV| L2
+    end
+    
+    L2 -->|F. Affiche les résultats| UI
 
 **Pipeline de traitement (backend) :**
 

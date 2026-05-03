@@ -55,7 +55,7 @@ graph TD
     
     L2 -->|F. Affiche les résultats| UI
 
-**Pipeline de traitement (backenda) :**
+**Pipeline de traitement (backend) :**
 
 1. **Amazon S3 :** stockage brut des PDF entrants.
 2. **AWS Lambda — Ingestion :** déclenchée automatiquement par S3 ; extrait le texte, appelle Bedrock et pousse les données vers Pinecone.

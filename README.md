@@ -27,7 +27,7 @@ Le tri de CV est souvent l'une des tâches les plus chronophages pour les équip
 ## 🏗️ Architecture Cloud (100% Serverless)
 
 L'application repose sur une infrastructure AWS native, événementielle et hautement scalable.
-
+```mermaid
 graph TD
     %% Définition des couleurs
     classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
@@ -54,6 +54,7 @@ graph TD
     end
     
     L2 -->|F. Affiche les résultats| UI
+```
 
 **Pipeline de traitement (backend) :**
 

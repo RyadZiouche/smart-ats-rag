@@ -1,0 +1,15 @@
+aws_region   = "us-east-1"
+project_name = "smart-meeting-rag"
+environment  = "dev"
+
+# S3 — nom globalement unique, ajoutez votre pseudo
+s3_bucket_name = "smart-meeting-rag-audio-ryadziouche"
+
+dynamodb_table_name = "FeedbackStore"
+
+# Récupérez ces valeurs sur app.pinecone.io
+pinecone_api_key    = "your-pinecone-api-key"
+pinecone_index_name = "smart-meeting-rag"
+
+# Email pour les alertes SNS
+alert_email = "votre.email@example.com"

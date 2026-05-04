@@ -1,1 +1,40 @@
+# Secrets — ne jamais commiter
 .env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# AWS SAM / CDK
+.aws-sam/
+cdk.out/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!terraform.tfvars.example
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Data locale (CV / audio de test)
+data/raw_cvs/
+data/sample_meetings/*.mp3
+data/sample_meetings/*.wav

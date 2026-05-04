@@ -239,5 +239,5 @@ C'est exactement ce qu'on attend d'un pipeline MLOps en production — pas juste
 ## 👤 Auteur
 
 **Ryad Ziouche**
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://linkedin.com/in/ryadziouche)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ryad-ziouche-318959297/)
 [![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/RyadZiouche)

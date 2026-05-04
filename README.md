@@ -1,126 +1,243 @@
-# 💼 Smart ATS — Moteur de Recherche Sémantique de CV (RAG 100% Serverless)
+# 🎙️ Smart Meeting RAG — Serverless RAG Pipeline with Observability
 
 ![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)
-![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
-![Streamlit](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Terraform](https://img.shields.io/badge/Terraform-%235835CC.svg?style=for-the-badge&logo=terraform&logoColor=white)
 ![Pinecone](https://img.shields.io/badge/Pinecone-000000?style=for-the-badge&logo=pinecone&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)
 
-## 📌 Contexte
+> Pipeline RAG serverless de bout en bout sur transcriptions audio de réunions — avec feedback loop, réindexation automatique et observabilité CloudWatch.
 
-Le tri de CV est souvent l'une des tâches les plus chronophages pour les équipes RH. Les moteurs de recherche classiques par mots-clés montrent rapidement leurs limites : ils ignorent le contexte, la synonymie et l'expérience globale d'un candidat.
+---
 
-**La solution :** un Applicant Tracking System (ATS) intelligent basé sur l'architecture RAG (Retrieval-Augmented Generation), capable de comprendre le langage naturel et de faire correspondre sémantiquement des CV avec des offres d'emploi ou des requêtes spécifiques.
+## 📌 Problème & Solution
+
+Les réunions d'entreprise génèrent une quantité massive d'informations non structurées, impossibles à retrouver après coup. Les outils de recherche classiques par mots-clés ignorent le contexte et la sémantique.
+
+**La solution :** un pipeline MLOps serverless qui transcrit automatiquement les réunions audio, les indexe sémantiquement, et permet de les interroger en langage naturel — avec un système de feedback loop qui améliore la précision du RAG dans le temps.
+
+---
+
+## 🏗️ Architecture
+
+```
+Audio MP3/WAV
+     │
+     ▼
+Amazon S3  ──(trigger)──▶  Lambda Ingestion
+                                   │
+                          AWS Transcribe
+                          (audio → texte)
+                                   │
+                            Chunking
+                         (300 mots, overlap 50)
+                                   │
+                       Bedrock Titan Embed
+                           (1536 dims)
+                                   │
+                              Pinecone
+                           (Vector Store)
+                                   │
+              ┌────────────────────┴────────────────────┐
+              │                                         │
+     Lambda Search                             Lambda Reindexation
+   (API Gateway)                              (EventBridge — lundi 2h)
+              │                                         │
+    Bedrock Claude Haiku                        DynamoDB Scan
+    (RAG generation)                         (feedbacks négatifs)
+              │                                         │
+         Streamlit UI                         Re-chunking fin
+       (Chat + 👍/👎)                       (150 mots) + Re-embed
+              │                                         │
+     Lambda Feedback                            Pinecone Upsert
+              │
+          DynamoDB
+       (FeedbackStore)
+              │
+         CloudWatch
+    (métriques + alarmes)
+```
 
 ---
 
 ## 🚀 Fonctionnalités
 
-- **Upload et ingestion automatisés :** dépôt de CV (PDF) directement depuis l'interface vers Amazon S3.
-- **Anonymisation RGPD et extraction :** utilisation de **Claude Haiku (AWS Bedrock)** pour extraire et structurer les compétences tout en supprimant les données personnelles.
-- **Vectorisation sémantique :** transformation des profils en vecteurs mathématiques (1 536 dimensions) via **Amazon Titan**.
-- **Recherche en langage naturel :** interrogation de la base de données vectorielle **Pinecone** avec des phrases simples (ex. : *« Je cherche un développeur Python avec 2 ans d'expérience »*).
-- **Matching d'offres d'emploi :** soumission d'une fiche de poste complète pour trouver les profils les plus pertinents.
-- **Interface utilisateur :** front-end interactif développé avec **Streamlit**.
+**Pipeline d'ingestion event-driven**
+Upload d'un fichier audio → S3 déclenche automatiquement la Lambda d'ingestion → AWS Transcribe convertit l'audio en texte → découpe en chunks de 300 mots avec overlap → vectorisation Bedrock Titan (1536 dims) → indexation Pinecone.
+
+**Chat RAG conversationnel**
+Interrogation en langage naturel avec historique de conversation. Claude Haiku génère des réponses sourcées en citant la réunion et le segment exact. Top-k=5 chunks récupérés par similarité cosinus.
+
+**Feedback loop human-in-the-loop**
+Chaque réponse est évaluable via 👍/👎. Les feedbacks sont stockés dans DynamoDB avec les chunk IDs utilisés, le score et la question posée.
+
+**Réindexation automatique**
+Chaque lundi à 2h UTC, EventBridge déclenche la Lambda de réindexation qui relit les feedbacks négatifs, identifie les chunks mal retrouvés et les réindexe avec une stratégie de chunking plus fine (150 mots). La courbe de précision RAG s'améliore dans le temps.
+
+**Observabilité complète**
+Métriques custom CloudWatch : latence de recherche, score de similarité top-1, compteurs de feedback positif/négatif, chunks réindexés. Alarme SNS déclenchée si le taux de feedbacks négatifs dépasse le seuil en 24h.
 
 ---
 
-## 🏗️ Architecture Cloud (100% Serverless)
+## 🛠️ Stack Technique
 
-L'application repose sur une infrastructure AWS native, événementielle et hautement scalable.
-```mermaid
-graph TD
-    %% Définition des couleurs
-    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
-    classDef front fill:#FE4B4B,stroke:#232F3E,stroke-width:2px,color:white;
-    classDef db fill:#000000,stroke:#232F3E,stroke-width:2px,color:white;
+| Composant | Service | Rôle |
+|---|---|---|
+| Stockage audio | Amazon S3 | Bucket avec versioning + lifecycle rules |
+| Transcription | AWS Transcribe | Audio → texte structuré |
+| LLM Génération | Bedrock Claude Haiku | Réponses RAG conversationnelles |
+| Embedding | Bedrock Amazon Titan | Vectorisation 1536 dims |
+| Vector DB | Pinecone Serverless | Indexation + recherche cosinus |
+| Feedback store | DynamoDB | Feedbacks + 2 GSI + TTL 90j |
+| Orchestration | AWS Lambda (x4) | Ingestion, Search, Feedback, Reindexation |
+| API | API Gateway HTTP | Routes POST /search et /feedback |
+| Scheduler | EventBridge | Cron hebdomadaire réindexation |
+| Monitoring | CloudWatch | Métriques custom + alarmes SNS |
+| IaC | Terraform | 31 ressources AWS versionnées |
+| Frontend | Streamlit | UI 3 onglets (Upload, Chat, Dashboard) |
 
-    User([👤 Recruteur]) -->|Interagit avec| UI(🖥️ Interface Streamlit):::front
+---
 
-    subgraph AWS [Cloud AWS - 100% Serverless]
-        UI -->|1. Upload CV| S3[(Amazon S3\nStockage PDF)]:::aws
-        S3 -->|2. Déclenche| L1(⚡ Lambda Ingestion):::aws
-        L1 -->|3. Parse & Anonymise| B1{🧠 Bedrock\nClaude 4.5}:::aws
-        L1 -->|4. Vectorise| B2{🧠 Bedrock\nTitan Embedding}:::aws
-        
-        UI -->|A. Requête de recherche| API(🌐 API Gateway):::aws
-        API -->|B. Route vers| L2(⚡ Lambda Search):::aws
-        L2 -->|C. Vectorise la requête| B2
-    end
+## 📂 Structure du Projet
 
-    subgraph External [Base Vectorielle]
-        L1 -->|5. Stocke les Vecteurs| PC[(🌲 Pinecone)]:::db
-        L2 -->|D. Recherche de Similarité| PC
-        PC -->|E. Renvoie Top 3 CV| L2
-    end
-    
-    L2 -->|F. Affiche les résultats| UI
 ```
-
-**Pipeline de traitement (backend) :**
-
-1. **Amazon S3 :** stockage brut des PDF entrants.
-2. **AWS Lambda — Ingestion :** déclenchée automatiquement par S3 ; extrait le texte, appelle Bedrock et pousse les données vers Pinecone.
-3. **AWS Bedrock (Claude Haiku) :** LLM utilisé pour le parsing JSON et l'anonymisation stricte.
-4. **AWS Bedrock (Amazon Titan) :** modèle d'embedding pour la création des vecteurs.
-5. **Pinecone :** base de données vectorielle gérant l'indexation et la recherche par similarité cosinus.
-6. **Amazon API Gateway :** point d'entrée HTTP sécurisé.
-7. **AWS Lambda — Search :** reçoit les requêtes via l'API, les vectorise, interroge Pinecone et renvoie les résultats formatés.
-
----
-
-## 📂 Structure du projet
-
-```text
-smart-ats-rag/
+smart-meeting-rag/
 │
-├── data/
-│   └── raw_cvs/                # CV de test en local
+├── infra/
+│   ├── main.tf                   # 31 ressources AWS (S3, Lambda, DynamoDB, API GW...)
+│   ├── variables.tf              # Déclaration des variables
+│   ├── outputs.tf                # API URL, ARNs exportés après apply
+│   ├── terraform.tfvars.example  # Template de configuration
+│   └── check_env.py              # Sanity check CI/CD (credentials, services)
 │
 ├── src/
 │   ├── frontend/
-│   │   └── app.py              # Interface Streamlit
+│   │   └── app.py                # Streamlit : Upload, Chat, Dashboard MLOps
 │   │
 │   └── lambdas/
 │       ├── ingestion/
-│       │   └── app.py          # Lambda d'ingestion (S3 → Bedrock → Pinecone)
-│       │
-│       ├── chat/
-│       │   └── app.py          # Lambda de recherche (API Gateway → Bedrock → Pinecone)
-│       │
-│       └── feedback/           # Module futur (Human-in-the-loop)
+│       │   └── app.py            # S3 trigger → Transcribe → chunk → Titan → Pinecone
+│       ├── search/
+│       │   └── app.py            # query → embed → Pinecone → Claude Haiku → réponse
+│       ├── feedback/
+│       │   └── app.py            # 👍/👎 → DynamoDB + métriques CloudWatch
+│       └── reindexation/
+│           └── app.py            # EventBridge → feedbacks négatifs → réindexation
 │
-└── tests/
-    └── test_ingestion.py       # Tests locaux pour le parsing et l'embedding
+├── tests/
+│   └── test_ingestion.py
+│
+├── .env.example
+└── README.md
 ```
 
 ---
 
-## 🛠️ Installation et lancement en local
+## ⚙️ Installation & Déploiement
 
 ### Prérequis
 
-- Un compte AWS avec accès à Bedrock et S3
-- Un compte Pinecone avec un index configuré en 1 536 dimensions
+- AWS CLI configuré (`aws configure`)
+- Terraform >= 1.5
 - Python 3.11+
+- Compte Pinecone (index 1536 dims, cosine, serverless, us-east-1)
 
-### Étapes
-
-1. Clonez le dépôt :
-
-```bash
-   git clone https://github.com/votre-nom/smart-ats-rag.git
-   cd smart-ats-rag
-```
-
-2. Installez les dépendances :
+### 1. Cloner le repo
 
 ```bash
-   pip install streamlit boto3 requests pypdf pinecone-client python-dotenv
+git clone https://github.com/RyadZiouche/smart-meeting-rag.git
+cd smart-meeting-rag
 ```
 
-3. Lancez l'interface Streamlit :
+### 2. Configurer les variables
 
 ```bash
-   cd src/frontend
-   streamlit run app.py
+cp .env.example .env
+# Remplir .env avec vos valeurs
+
+cp infra/terraform.tfvars.example infra/terraform.tfvars
+# Remplir terraform.tfvars avec vos valeurs
 ```
+
+### 3. Déployer l'infrastructure
+
+```bash
+cd infra
+terraform init
+terraform plan    # visualiser les 31 ressources
+terraform apply   # déployer (~2 min)
+```
+
+L'output `api_base_url` est à copier dans votre `.env`.
+
+### 4. Vérifier l'environnement
+
+```bash
+python infra/check_env.py
+# Doit afficher 17/17 ✅
+```
+
+### 5. Lancer le frontend
+
+```bash
+cd src/frontend
+streamlit run app.py
+```
+
+---
+
+## 🔄 Le Cycle MLOps
+
+Ce projet implémente le cycle complet **Serve → Monitor → Retrain** appliqué à un pipeline RAG :
+
+```
+1. SERVE       Upload audio → transcription → indexation → recherche
+2. COLLECT     Feedback utilisateur 👍/👎 stocké dans DynamoDB
+3. MONITOR     CloudWatch : précision RAG, latence, taux de feedback négatif
+4. RETRAIN     EventBridge weekly → réindexation des chunks mal retrouvés
+               → amélioration mesurable de la précision dans le temps
+```
+
+C'est exactement ce qu'on attend d'un pipeline MLOps en production — pas juste "brancher une API", mais mesurer, monitorer et améliorer en continu.
+
+---
+
+## 📊 Métriques CloudWatch (Namespace : SmartMeetingRAG)
+
+| Métrique | Description |
+|---|---|
+| `SearchLatencyMs` | Latence end-to-end de chaque requête |
+| `TopChunkSimilarity` | Score cosinus du chunk le plus proche |
+| `SearchCount` | Nombre total de requêtes |
+| `PositiveFeedback` | Compteur 👍 |
+| `NegativeFeedback` | Compteur 👎 |
+| `ReindexedChunks` | Chunks réindexés par cycle |
+| `ProcessedNegativeFeedbacks` | Feedbacks traités par cycle |
+
+---
+
+## 🔐 Sécurité
+
+- Bucket S3 avec accès public bloqué
+- Variables sensibles dans `terraform.tfvars` (jamais commité)
+- IAM role avec least-privilege policy (actions spécifiques par service)
+- TTL DynamoDB : suppression automatique des feedbacks après 90 jours
+- Clé Pinecone injectée comme variable d'environnement Lambda (sensitive = true dans Terraform)
+
+---
+
+## 💡 Pistes d'Amélioration
+
+- Remote backend Terraform (S3 + DynamoDB state locking) pour le travail en équipe
+- CI/CD GitHub Actions : `terraform plan` sur PR, `terraform apply` sur merge main
+- A/B test Titan v1 vs Titan v2 pour comparer la qualité des embeddings
+- Support multilingue AWS Transcribe (fr-FR / en-US détection automatique)
+- Lambda layers pour les dépendances Python communes (boto3, pinecone)
+
+---
+
+## 👤 Auteur
+
+**Ryad Ziouche**
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://linkedin.com/in/ryadziouche)
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white)](https://github.com/RyadZiouche)
